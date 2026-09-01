@@ -7,7 +7,7 @@ ogni cambiamento — inclusi i cambi di sola **località** a parità di stato
 ## Come funziona
 
 - Ogni utente registra i propri codici via chat (`/aggiungi`).
-- Un job schedulato (default: ogni 20 minuti) interroga Poste in batch per
+- Un job schedulato (default: ogni 5 minuti) interroga Poste in batch per
   tutti i codici attivi con un'unica richiesta ogni 20 codici.
 - Per ogni spedizione, confronta l'ultimo evento noto (timestamp) con quelli
   appena scaricati: qualsiasi evento più recente genera una notifica.
@@ -26,7 +26,7 @@ Modifica `.env`:
 
 ```
 BOT_TOKEN=...       # da BotFather su Telegram (/newbot)
-POLL_INTERVAL_MINUTES=20
+POLL_INTERVAL_MINUTES=5
 DB_PATH=./data/tracking.db
 ```
 
