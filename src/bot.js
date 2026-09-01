@@ -35,10 +35,9 @@ async function sendShipmentDetails(ctx, code) {
     }
     const history = result.events
       .slice()
-      .reverse()
       .map(
         (e) =>
-          `📦 ${new Date(e.timestamp).toLocaleString('it-IT')} — ${e.status}${e.location ? ` (${e.location})` : ''}`
+          `- ${new Date(e.timestamp).toLocaleString('it-IT')} — ${e.status}${e.location ? ` (${e.location})` : ''}`
       )
       .join('\n\n');
     return ctx.reply(`Storico ${normalizedCode}:\n\n${history || 'nessun movimento disponibile'}`);
