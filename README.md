@@ -49,7 +49,7 @@ pm2 save
 |---|---|
 | `/aggiungi CODICE [etichetta]` | Registra una spedizione. Fa un primo controllo silenzioso per fissare la baseline (non manda notifiche sullo storico pregresso). |
 | `/lista` | Mostra le spedizioni attive con stato e località correnti. |
-| `/dettagli CODICE` | Storico completo dei movimenti. |
+| `/dettagli [CODICE]` | Storico completo dei movimenti. Senza codice mostra una lista di bottoni per scegliere tra le spedizioni attive. |
 | `/rimuovi CODICE` | Smette di seguire quella spedizione. |
 
 ## ⚠️ Nota importante sulla fonte dati

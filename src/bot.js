@@ -1,15 +1,46 @@
 'use strict';
 
-const { Telegraf } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 const repo = require('./repository');
 const { trackMultiple } = require('./posteTracker');
 
 const HELP_TEXT =
   '/aggiungi CODICE [etichetta] - registra una spedizione\n' +
   '/lista - spedizioni registrate e stato attuale\n' +
-  '/dettagli CODICE - storico completo di una spedizione\n' +
+  '/dettagli [CODICE] - storico completo di una spedizione; senza codice mostra la selezione\n' +
   '/rimuovi CODICE - smetti di seguirla\n' +
   '/help - questo messaggio';
+
+function buildShipmentDetailsKeyboard(shipments) {
+  return Markup.inlineKeyboard(
+    shipments.map((shipment) => [
+      Markup.button.callback(
+        shipment.label ? `${shipment.label} (${shipment.tracking_code})` : shipment.tracking_code,
+        `details:${shipment.tracking_code}`
+      ),
+    ])
+  );
+}
+
+async function sendShipmentDetails(ctx, code) {
+  try {
+    const [result] = await trackMultiple([code.toUpperCase()]);
+    if (!result || result.error) {
+      return ctx.reply(`Nessuna informazione trovata per ${code.toUpperCase()}.`);
+    }
+    const history = result.events
+      .slice()
+      .reverse()
+      .map(
+        (e) =>
+          `${new Date(e.timestamp).toLocaleString('it-IT')} — ${e.status}${e.location ? ` (${e.location})` : ''}`
+      )
+      .join('\n');
+    return ctx.reply(`Storico ${code.toUpperCase()}:\n\n${history || 'nessun movimento disponibile'}`);
+  } catch (err) {
+    return ctx.reply(`Errore nel recupero dei dettagli: ${err.message}`);
+  }
+}
 
 function createBot(token) {
   const bot = new Telegraf(token);
@@ -77,7 +108,8 @@ function createBot(token) {
       const luogo = s.last_location ? ` — ${s.last_location}` : '';
       return `${titolo}\n  ${stato}${luogo}`;
     });
-    ctx.reply(lines.join('\n\n'));
+    const keyboard = buildShipmentDetailsKeyboard(shipments);
+    ctx.reply(`Spedizioni attive:\n\n${lines.join('\n\n')}`, keyboard);
   });
 
   bot.command('rimuovi', (ctx) => {
@@ -89,25 +121,24 @@ function createBot(token) {
 
   bot.command('dettagli', async (ctx) => {
     const code = ctx.message.text.trim().split(/\s+/)[1];
-    if (!code) return ctx.reply('Uso: /dettagli CODICE');
-
-    try {
-      const [result] = await trackMultiple([code.toUpperCase()]);
-      if (!result || result.error) {
-        return ctx.reply(`Nessuna informazione trovata per ${code.toUpperCase()}.`);
+    if (!code) {
+      const shipments = repo.listShipments(ctx.chat.id);
+      if (shipments.length === 0) {
+        return ctx.reply('Non hai spedizioni attive. Usa /aggiungi CODICE per iniziare.');
       }
-      const history = result.events
-        .slice()
-        .reverse()
-        .map(
-          (e) =>
-            `${new Date(e.timestamp).toLocaleString('it-IT')} — ${e.status}${e.location ? ` (${e.location})` : ''}`
-        )
-        .join('\n');
-      ctx.reply(`Storico ${code.toUpperCase()}:\n\n${history || 'nessun movimento disponibile'}`);
-    } catch (err) {
-      ctx.reply(`Errore nel recupero dei dettagli: ${err.message}`);
+      return ctx.reply(
+        'Seleziona la spedizione di cui vuoi vedere i dettagli:',
+        buildShipmentDetailsKeyboard(shipments)
+      );
     }
+
+    return sendShipmentDetails(ctx, code);
+  });
+
+  bot.action(/details:(.+)/, async (ctx) => {
+    const code = ctx.match[1].trim();
+    await ctx.answerCbQuery();
+    return sendShipmentDetails(ctx, code);
   });
 
   return bot;
