@@ -1,6 +1,7 @@
 'use strict';
 
 const { getDb } = require('./db');
+const { normalizeTrackingCode } = require('./posteTracker');
 
 function upsertUser(chatId, username) {
   const db = getDb();
@@ -11,6 +12,9 @@ function upsertUser(chatId, username) {
 }
 
 function addShipment(chatId, code, label) {
+  const normalizedCode = normalizeTrackingCode(code);
+  if (!normalizedCode) return null;
+
   const db = getDb();
   return db
     .prepare(
@@ -18,7 +22,7 @@ function addShipment(chatId, code, label) {
        VALUES (?, ?, ?)
        ON CONFLICT(chat_id, tracking_code) DO UPDATE SET active = 1, error_count = 0, label = excluded.label`
     )
-    .run(chatId, code.toUpperCase(), label || null);
+    .run(chatId, normalizedCode, label || null);
 }
 
 function listShipments(chatId) {
@@ -29,17 +33,23 @@ function listShipments(chatId) {
 }
 
 function removeShipment(chatId, code) {
+  const normalizedCode = normalizeTrackingCode(code);
+  if (!normalizedCode) return null;
+
   const db = getDb();
   return db
     .prepare(`UPDATE shipments SET active = 0 WHERE chat_id = ? AND tracking_code = ?`)
-    .run(chatId, code.toUpperCase());
+    .run(chatId, normalizedCode);
 }
 
 function getShipment(chatId, code) {
+  const normalizedCode = normalizeTrackingCode(code);
+  if (!normalizedCode) return null;
+
   const db = getDb();
   return db
     .prepare(`SELECT * FROM shipments WHERE chat_id = ? AND tracking_code = ?`)
-    .get(chatId, code.toUpperCase());
+    .get(chatId, normalizedCode);
 }
 
 function getAllActiveDistinctCodes() {

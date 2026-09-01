@@ -26,6 +26,18 @@ const HEADERS = {
   Origin: 'https://www.poste.it',
 };
 
+function normalizeTrackingCode(code) {
+  if (code == null) return null;
+
+  const cleaned = String(code)
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF\s]/g, '')
+    .replace(/[^A-Za-z0-9]/g, '')
+    .toUpperCase();
+
+  return cleaned || null;
+}
+
 /**
  * Interroga Poste per una lista di codici (max consigliato ~20 per chiamata)
  * e ritorna un array normalizzato:
@@ -35,17 +47,30 @@ const HEADERS = {
 async function trackMultiple(codes) {
   if (!codes || codes.length === 0) return [];
 
+  const normalizedCodes = codes.map(normalizeTrackingCode).filter(Boolean);
+  if (normalizedCodes.length === 0) return [];
+
   const res = await fetch(POSTE_URL, {
     method: 'POST',
     headers: HEADERS,
     body: JSON.stringify({
       tipoRichiedente: 'WEB',
-      listaCodici: codes,
+      listaCodici: normalizedCodes,
     }),
   });
+  console.log(`Poste ha risposto con status HTTP ${res.status} per ${normalizedCodes.length} codici: ${normalizedCodes.join(', ')}`);
 
   if (!res.ok) {
-    throw new Error(`Poste ha risposto con status HTTP ${res.status}`);
+    const message = `Poste ha risposto con status HTTP ${res.status}`;
+    if (res.status === 400) {
+      return normalizedCodes.map((code) => ({
+        code,
+        error: 'codice non valido o non trovato',
+        status: null,
+        events: [],
+      }));
+    }
+    throw new Error(message);
   }
 
   const data = await res.json();
@@ -58,7 +83,7 @@ async function trackMultiple(codes) {
 }
 
 function normalizeShipment(raw) {
-  const code = raw.idTracciatura || raw.codice || null;
+  const code = normalizeTrackingCode(raw.idTracciatura || raw.codice || null);
 
   if (raw.descrizioneErrore) {
     return { code, error: raw.descrizioneErrore, status: null, events: [] };
@@ -80,4 +105,4 @@ function normalizeShipment(raw) {
   return { code, error: null, status, events };
 }
 
-module.exports = { trackMultiple };
+module.exports = { normalizeTrackingCode, trackMultiple, normalizeShipment };

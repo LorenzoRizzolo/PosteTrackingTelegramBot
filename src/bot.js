@@ -2,7 +2,7 @@
 
 const { Telegraf, Markup } = require('telegraf');
 const repo = require('./repository');
-const { trackMultiple } = require('./posteTracker');
+const { trackMultiple, normalizeTrackingCode } = require('./posteTracker');
 
 const HELP_TEXT =
   '/aggiungi CODICE [etichetta] - registra una spedizione\n' +
@@ -23,10 +23,15 @@ function buildShipmentActionKeyboard(shipments, action) {
 }
 
 async function sendShipmentDetails(ctx, code) {
+  const normalizedCode = normalizeTrackingCode(code);
+  if (!normalizedCode) {
+    return ctx.reply('Codice spedizione non valido. Usa un codice composto da lettere e numeri senza spazi o caratteri invisibili.');
+  }
+
   try {
-    const [result] = await trackMultiple([code.toUpperCase()]);
+    const [result] = await trackMultiple([normalizedCode]);
     if (!result || result.error) {
-      return ctx.reply(`Nessuna informazione trovata per ${code.toUpperCase()}.`);
+      return ctx.reply(`Nessuna informazione trovata per ${normalizedCode}.`);
     }
     const history = result.events
       .slice()
@@ -36,7 +41,7 @@ async function sendShipmentDetails(ctx, code) {
           `${new Date(e.timestamp).toLocaleString('it-IT')} — ${e.status}${e.location ? ` (${e.location})` : ''}`
       )
       .join('\n');
-    return ctx.reply(`Storico ${code.toUpperCase()}:\n\n${history || 'nessun movimento disponibile'}`);
+    return ctx.reply(`Storico ${normalizedCode}:\n\n${history || 'nessun movimento disponibile'}`);
   } catch (err) {
     return ctx.reply(`Errore nel recupero dei dettagli: ${err.message}`);
   }
@@ -54,8 +59,9 @@ function createBot(token) {
 
   bot.command('aggiungi', async (ctx) => {
     const parts = ctx.message.text.trim().split(/\s+/).slice(1);
-    const code = (parts[0] || '').trim();
+    const rawCode = (parts[0] || '').trim();
     const label = parts.slice(1).join(' ') || null;
+    const code = normalizeTrackingCode(rawCode);
 
     if (!code) {
       return ctx.reply('Uso: /aggiungi CODICE [etichetta]\nEsempio: /aggiungi RR123456789IT regalo compleanno');
@@ -68,7 +74,7 @@ function createBot(token) {
     // Non mandiamo notifiche qui: serve solo a evitare che al primo poll
     // arrivi una raffica di messaggi con tutto lo storico pregresso.
     try {
-      const [result] = await trackMultiple([code.toUpperCase()]);
+      const [result] = await trackMultiple([code]);
       const shipment = repo.getShipment(ctx.chat.id, code);
 
       if (result && !result.error) {
@@ -79,19 +85,19 @@ function createBot(token) {
           eventTs: lastEvent ? lastEvent.timestamp : 0,
         });
         ctx.reply(
-          `Spedizione ${code.toUpperCase()} registrata.\n` +
+          `Spedizione ${code} registrata.\n` +
             `Stato attuale: ${result.status || 'nessuna informazione'}` +
             `${lastEvent && lastEvent.location ? ` — ${lastEvent.location}` : ''}`
         );
       } else {
         ctx.reply(
-          `Spedizione ${code.toUpperCase()} registrata, ma per ora non trovo informazioni ` +
+          `Spedizione ${code} registrata, ma per ora non trovo informazioni ` +
             `(${result ? result.error : 'nessuna risposta da Poste'}). Continuerò a controllare.`
         );
       }
     } catch (err) {
       ctx.reply(
-        `Spedizione ${code.toUpperCase()} registrata. Il primo controllo non è riuscito ` +
+        `Spedizione ${code} registrata. Il primo controllo non è riuscito ` +
           `(${err.message}), ci riproverò al prossimo giro automatico.`
       );
     }
@@ -113,7 +119,8 @@ function createBot(token) {
   });
 
   bot.command('rimuovi', (ctx) => {
-    const code = ctx.message.text.trim().split(/\s+/)[1];
+    const rawCode = ctx.message.text.trim().split(/\s+/)[1];
+    const code = normalizeTrackingCode(rawCode);
     if (!code) {
       const shipments = repo.listShipments(ctx.chat.id);
       if (shipments.length === 0) {
@@ -126,11 +133,12 @@ function createBot(token) {
     }
 
     repo.removeShipment(ctx.chat.id, code);
-    ctx.reply(`Ho smesso di seguire ${code.toUpperCase()}.`);
+    ctx.reply(`Ho smesso di seguire ${code}.`);
   });
 
   bot.command('dettagli', async (ctx) => {
-    const code = ctx.message.text.trim().split(/\s+/)[1];
+    const rawCode = ctx.message.text.trim().split(/\s+/)[1];
+    const code = normalizeTrackingCode(rawCode);
     if (!code) {
       const shipments = repo.listShipments(ctx.chat.id);
       if (shipments.length === 0) {
@@ -146,16 +154,16 @@ function createBot(token) {
   });
 
   bot.action(/details:(.+)/, async (ctx) => {
-    const code = ctx.match[1].trim();
+    const code = normalizeTrackingCode(ctx.match[1]);
     await ctx.answerCbQuery();
-    return sendShipmentDetails(ctx, code);
+    return sendShipmentDetails(ctx, code || ctx.match[1]);
   });
 
   bot.action(/remove:(.+)/, async (ctx) => {
-    const code = ctx.match[1].trim();
-    repo.removeShipment(ctx.chat.id, code);
-    await ctx.answerCbQuery(`Ho smesso di seguire ${code.toUpperCase()}.`);
-    return ctx.editMessageText(`Spedizione rimossa: ${code.toUpperCase()}`);
+    const code = normalizeTrackingCode(ctx.match[1]);
+    repo.removeShipment(ctx.chat.id, code || ctx.match[1]);
+    await ctx.answerCbQuery(`Ho smesso di seguire ${code || ctx.match[1].toUpperCase()}.`);
+    return ctx.editMessageText(`Spedizione rimossa: ${code || ctx.match[1].toUpperCase()}`);
   });
 
   return bot;
