@@ -38,9 +38,9 @@ async function sendShipmentDetails(ctx, code) {
       .reverse()
       .map(
         (e) =>
-          `${new Date(e.timestamp).toLocaleString('it-IT')} — ${e.status}${e.location ? ` (${e.location})` : ''}`
+          `📦 ${new Date(e.timestamp).toLocaleString('it-IT')} — ${e.status}${e.location ? ` (${e.location})` : ''}`
       )
-      .join('\n');
+      .join('\n\n');
     return ctx.reply(`Storico ${normalizedCode}:\n\n${history || 'nessun movimento disponibile'}`);
   } catch (err) {
     return ctx.reply(`Errore nel recupero dei dettagli: ${err.message}`);
