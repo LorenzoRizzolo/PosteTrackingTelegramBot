@@ -11,12 +11,12 @@ const HELP_TEXT =
   '/rimuovi CODICE - smetti di seguirla\n' +
   '/help - questo messaggio';
 
-function buildShipmentDetailsKeyboard(shipments) {
+function buildShipmentActionKeyboard(shipments, action) {
   return Markup.inlineKeyboard(
     shipments.map((shipment) => [
       Markup.button.callback(
         shipment.label ? `${shipment.label} (${shipment.tracking_code})` : shipment.tracking_code,
-        `details:${shipment.tracking_code}`
+        `${action}:${shipment.tracking_code}`
       ),
     ])
   );
@@ -108,13 +108,23 @@ function createBot(token) {
       const luogo = s.last_location ? ` — ${s.last_location}` : '';
       return `${titolo}\n  ${stato}${luogo}`;
     });
-    const keyboard = buildShipmentDetailsKeyboard(shipments);
+    const keyboard = buildShipmentActionKeyboard(shipments, 'details');
     ctx.reply(`Spedizioni attive:\n\n${lines.join('\n\n')}`, keyboard);
   });
 
   bot.command('rimuovi', (ctx) => {
     const code = ctx.message.text.trim().split(/\s+/)[1];
-    if (!code) return ctx.reply('Uso: /rimuovi CODICE');
+    if (!code) {
+      const shipments = repo.listShipments(ctx.chat.id);
+      if (shipments.length === 0) {
+        return ctx.reply('Non hai spedizioni attive. Usa /aggiungi CODICE per iniziare.');
+      }
+      return ctx.reply(
+        'Seleziona la spedizione da rimuovere:',
+        buildShipmentActionKeyboard(shipments, 'remove')
+      );
+    }
+
     repo.removeShipment(ctx.chat.id, code);
     ctx.reply(`Ho smesso di seguire ${code.toUpperCase()}.`);
   });
@@ -128,7 +138,7 @@ function createBot(token) {
       }
       return ctx.reply(
         'Seleziona la spedizione di cui vuoi vedere i dettagli:',
-        buildShipmentDetailsKeyboard(shipments)
+        buildShipmentActionKeyboard(shipments, 'details')
       );
     }
 
@@ -139,6 +149,13 @@ function createBot(token) {
     const code = ctx.match[1].trim();
     await ctx.answerCbQuery();
     return sendShipmentDetails(ctx, code);
+  });
+
+  bot.action(/remove:(.+)/, async (ctx) => {
+    const code = ctx.match[1].trim();
+    repo.removeShipment(ctx.chat.id, code);
+    await ctx.answerCbQuery(`Ho smesso di seguire ${code.toUpperCase()}.`);
+    return ctx.editMessageText(`Spedizione rimossa: ${code.toUpperCase()}`);
   });
 
   return bot;
