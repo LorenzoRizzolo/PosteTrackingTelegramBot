@@ -31,13 +31,13 @@ async function handleShipment(bot, shipment, result) {
   if (result.error) {
     const count = repo.bumpErrorCount(shipment.id);
     if (count >= MAX_ERRORS) {
-      repo.deactivateShipment(shipment.id);
-      await notify(
-        bot,
-        shipment.chat_id,
-        `Non riesco più a trovare informazioni per ${shipment.label || shipment.tracking_code} ` +
-          `(${result.error}). Ho smesso di controllarla — usa /aggiungi per riprovare.`
-      );
+      // repo.deactivateShipment(shipment.id);
+      // await notify(
+      //   bot,
+      //   shipment.chat_id,
+      //   `Non riesco più a trovare informazioni per ${shipment.label || shipment.tracking_code} ` +
+      //     `(${result.error}). Ho smesso di controllarla — usa /aggiungi per riprovare.`
+      // );
     }
     return;
   }
